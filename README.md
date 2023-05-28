@@ -799,19 +799,36 @@ cfssl gencert \
 
 Now it is time to start sending all the client and server certificates to their respective instances.
 
-Let us begin with the worker nodes: Copy these files securely to the worker nodes using scp utility
+## Let us begin with the worker nodes: Copy these files securely to the worker nodes using scp utility
 
 Root CA certificate – ca.pem X509 Certificate for each worker node Private Key of the certificate for each worker node
 
-for i in 0 1 2; do instance="${NAME}-worker-${i}" external_ip=$(aws ec2 describe-instances \ --filters "Name=tag:Name,Values=${instance}" \ --output text --query 'Reservations[].Instances[].PublicIpAddress') scp -i ../ssh/${NAME}.id_rsa \ ca.pem ${instance}-key.pem ${instance}.pem ubuntu@${external_ip}:~/; \ done
+for i in 0 1 2; do
+  instance="${NAME}-worker-${i}"
+  external_ip=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=${instance}" \
+    --output text --query 'Reservations[].Instances[].PublicIpAddress')
+  scp -i ../ssh/${NAME}.id_rsa \
+    ca.pem ${instance}-key.pem ${instance}.pem ubuntu@${external_ip}:~/; \
+done
 
-Master or Controller node: – Note that only the api-server related files will be sent over to the master nodes.
 
-for i in 0 1 2; do instance="${NAME}-master-${i}" external_ip=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${instance}" --output text --query 'Reservations[].Instances[].PublicIpAddress') scp -i ../ssh/${NAME}.id_rsa ca.pem ca-key.pem service-account-key.pem service-account.pem master-kubernetes.pem master-kubernetes-key.pem ubuntu@${external_ip}:~/; done
+## Master or Controller node: – Note that only the api-server related files will be sent over to the master nodes.
+
+for i in 0 1 2; do
+instance="${NAME}-master-${i}" \
+  external_ip=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=${instance}" \
+    --output text --query 'Reservations[].Instances[].PublicIpAddress')
+  scp -i ../ssh/${NAME}.id_rsa \
+    ca.pem ca-key.pem service-account-key.pem service-account.pem \
+    master-kubernetes.pem master-kubernetes-key.pem ubuntu@${external_ip}:~/;
+done
+
 
 The kube-proxy, kube-controller-manager, kube-scheduler, and kubelet client certificates will be used to generate client authentication configuration files later.
 
-STEP 5 USE KUBECTL TO GENERATE KUBERNETES CONFIGURATION FILES FOR AUTHENTICATION
+## STEP 5 USE KUBECTL TO GENERATE KUBERNETES CONFIGURATION FILES FOR AUTHENTICATION
 ========================================================================================
 
 All the work you are doing right now is ensuring that you do not face any difficulties by the time the Kubernetes cluster is up and running. In this step, you will create some files known as kubeconfig, which enables Kubernetes clients to locate and authenticate to the Kubernetes API Servers.
