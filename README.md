@@ -838,34 +838,53 @@ You will need a client tool called kubectl to do this. And, by the way, most of 
 Now it’s time to generate kubeconfig files for the kubelet, controller manager, kube-proxy, and scheduler clients and then the admin user.
 
 First, let us create a few environment variables for reuse by multiple commands.
-KUBERNETES_API_SERVER_ADDRESS=$(aws elbv2 describe-load-balancers --load-balancer-arns ${LOAD_BALANCER_ARN} --output text --query 'LoadBalancers[].DNSName')
 
-Generate the kubelet kubeconfig file ==============================================
+`KUBERNETES_API_SERVER_ADDRESS=$(aws elbv2 describe-load-balancers --load-balancer-arns ${LOAD_BALANCER_ARN} --output text --query 'LoadBalancers[].DNSName')`
+
+1. Generate the kubelet kubeconfig file 
+==============================================
+
 For each of the nodes running the kubelet component, it is very important that the client certificate configured for that node is used to generate the kubeconfig. This is because each certificate has the node’s DNS name or IP Address configured at the time the certificate was generated. It will also ensure that the appropriate authorization is applied to that node through the Node Authorizer
 
-Below command must be run in the directory where all the certificates were generated.
+## Below command must be run in the directory where all the certificates were generated.
 
-`for i in 0 1 2; do
+for i in 0 1 2; do
 
-instance="${NAME}-worker-${i}" instance_hostname="ip-172-31-0-2${i}"
+instance="${NAME}-worker-${i}"
+instance_hostname="ip-172-31-0-2${i}"
 
-Set the kubernetes cluster in the kubeconfig file
-kubectl config set-cluster ${NAME} --certificate-authority=ca.pem --embed-certs=true --server=https://$KUBERNETES_API_SERVER_ADDRESS:6443 --kubeconfig=${instance}.kubeconfig
+ # Set the kubernetes cluster in the kubeconfig file
+  kubectl config set-cluster ${NAME} \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://$KUBERNETES_API_SERVER_ADDRESS:6443 \
+    --kubeconfig=${instance}.kubeconfig
 
-Set the cluster credentials in the kubeconfig file
-kubectl config set-credentials system:node:${instance_hostname} --client-certificate=${instance}.pem --client-key=${instance}-key.pem --embed-certs=true --kubeconfig=${instance}.kubeconfig
+# Set the cluster credentials in the kubeconfig file
+  kubectl config set-credentials system:node:${instance_hostname} \
+    --client-certificate=${instance}.pem \
+    --client-key=${instance}-key.pem \
+    --embed-certs=true \
+    --kubeconfig=${instance}.kubeconfig
 
-Set the context in the kubeconfig file
-kubectl config set-context default --cluster=${NAME} --user=system:node:${instance_hostname} --kubeconfig=${instance}.kubeconfig
+# Set the context in the kubeconfig file
+  kubectl config set-context default \
+    --cluster=${NAME} \
+    --user=system:node:${instance_hostname} \
+    --kubeconfig=${instance}.kubeconfig
 
-kubectl config use-context default --kubeconfig=${instance}.kubeconfig done`
+  kubectl config use-context default --kubeconfig=${instance}.kubeconfig
+done
 
-List the output
+
+## List the output
 ls -ltr *.kubeconfig
 
-Open up the kubeconfig files generated and review the 3 different sections that have been configured:
+## Open up the kubeconfig files generated and review the 3 different sections that have been configured:
 
-Cluster Credentials And Kube Context
+> Cluster 
+> Credentials And 
+> Kube Context
 
 Kubeconfig file is used to organize information about clusters, users, namespaces and authentication mechanisms. By default, kubectl looks for a file named config in the $HOME/.kube directory. You can specify other kubeconfig files by setting the KUBECONFIG environment variable or by setting the --kubeconfig flag. To get to know more how to create your own kubeconfig files – read this documentation "https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/".
 
@@ -873,56 +892,140 @@ Context part of kubeconfig file defines three main parameters: cluster, namespac
 
 kubectl config use-context %context-name%
 
-Generate the kube-proxy kubeconfig { kubectl config set-cluster ${NAME} --certificate-authority=ca.pem --embed-certs=true --server=https://${KUBERNETES_API_SERVER_ADDRESS}:6443 --kubeconfig=kube-proxy.kubeconfig
-kubectl config set-credentials system:kube-proxy --client-certificate=kube-proxy.pem --client-key=kube-proxy-key.pem --embed-certs=true --kubeconfig=kube-proxy.kubeconfig
+2. Generate the kube-proxy kubeconfig 
 
-kubectl config set-context default --cluster=${NAME} --user=system:kube-proxy --kubeconfig=kube-proxy.kubeconfig
+{
+  kubectl config set-cluster ${NAME} \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://${KUBERNETES_API_SERVER_ADDRESS}:6443 \
+    --kubeconfig=kube-proxy.kubeconfig
 
-kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig } 3. Generate the Kube-Controller-Manager kubeconfig
+  kubectl config set-credentials system:kube-proxy \
+    --client-certificate=kube-proxy.pem \
+    --client-key=kube-proxy-key.pem \
+    --embed-certs=true \
+    --kubeconfig=kube-proxy.kubeconfig
+
+  kubectl config set-context default \
+    --cluster=${NAME} \
+    --user=system:kube-proxy \
+    --kubeconfig=kube-proxy.kubeconfig
+
+  kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+}
+
+
+3. Generate the Kube-Controller-Manager kubeconfig
 
 Notice that the --server is set to use 127.0.0.1. This is because, this component runs on the API-Server so there is no point routing through the Load Balancer.
 
-{ kubectl config set-cluster ${NAME} --certificate-authority=ca.pem --embed-certs=true --server=https://127.0.0.1:6443 --kubeconfig=kube-controller-manager.kubeconfig
+{
+  kubectl config set-cluster ${NAME} \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://127.0.0.1:6443 \
+    --kubeconfig=kube-controller-manager.kubeconfig
 
-kubectl config set-credentials system:kube-controller-manager --client-certificate=kube-controller-manager.pem --client-key=kube-controller-manager-key.pem --embed-certs=true --kubeconfig=kube-controller-manager.kubeconfig
+  kubectl config set-credentials system:kube-controller-manager \
+    --client-certificate=kube-controller-manager.pem \
+    --client-key=kube-controller-manager-key.pem \
+    --embed-certs=true \
+    --kubeconfig=kube-controller-manager.kubeconfig
 
-kubectl config set-context default --cluster=${NAME} --user=system:kube-controller-manager --kubeconfig=kube-controller-manager.kubeconfig
+  kubectl config set-context default \
+    --cluster=${NAME} \
+    --user=system:kube-controller-manager \
+    --kubeconfig=kube-controller-manager.kubeconfig
 
-kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig }
+  kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig
+}
 
-Generating the Kube-Scheduler Kubeconfig { kubectl config set-cluster ${NAME} --certificate-authority=ca.pem --embed-certs=true --server=https://127.0.0.1:6443 --kubeconfig=kube-scheduler.kubeconfig
 
-kubectl config set-credentials system:kube-scheduler --client-certificate=kube-scheduler.pem --client-key=kube-scheduler-key.pem --embed-certs=true --kubeconfig=kube-scheduler.kubeconfig
 
-kubectl config set-context default --cluster=${NAME} --user=system:kube-scheduler --kubeconfig=kube-scheduler.kubeconfig
+4. Generating the Kube-Scheduler Kubeconfig 
 
-kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig }
+{
+  kubectl config set-cluster ${NAME} \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://127.0.0.1:6443 \
+    --kubeconfig=kube-scheduler.kubeconfig
 
-Finally, generate the kubeconfig file for the admin user { kubectl config set-cluster ${NAME} --certificate-authority=ca.pem --embed-certs=true --server=https://${KUBERNETES_API_SERVER_ADDRESS}:6443 --kubeconfig=admin.kubeconfig
+  kubectl config set-credentials system:kube-scheduler \
+    --client-certificate=kube-scheduler.pem \
+    --client-key=kube-scheduler-key.pem \
+    --embed-certs=true \
+    --kubeconfig=kube-scheduler.kubeconfig
 
-kubectl config set-credentials admin --client-certificate=admin.pem --client-key=admin-key.pem --embed-certs=true --kubeconfig=admin.kubeconfig
+  kubectl config set-context default \
+    --cluster=${NAME} \
+    --user=system:kube-scheduler \
+    --kubeconfig=kube-scheduler.kubeconfig
 
-kubectl config set-context default --cluster=${NAME} --user=admin --kubeconfig=admin.kubeconfig
+  kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig
+}
 
-kubectl config use-context default --kubeconfig=admin.kubeconfig }
+
+
+5. Finally, generate the kubeconfig file for the admin user
+
+{
+  kubectl config set-cluster ${NAME} \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://${KUBERNETES_API_SERVER_ADDRESS}:6443 \
+    --kubeconfig=admin.kubeconfig
+
+  kubectl config set-credentials admin \
+    --client-certificate=admin.pem \
+    --client-key=admin-key.pem \
+    --embed-certs=true \
+    --kubeconfig=admin.kubeconfig
+
+  kubectl config set-context default \
+    --cluster=${NAME} \
+    --user=admin \
+    --kubeconfig=admin.kubeconfig
+
+  kubectl config use-context default --kubeconfig=admin.kubeconfig
+}
+
 
 TASK: Distribute the files to their respective servers, using scp and a for loop like we have done previously. This is a test to validate that you understand which component must go to which node.
-send kubeconfig to master node
-for i in 0 1 2; do instance="${NAME}-master-${i}"  external_ip=$(aws ec2 describe-instances \ --filters "Name=tag:Name,Values=${instance}" \ --output text --query 'Reservations[].Instances[].PublicIpAddress')  scp -i ../ssh/${NAME}.id_rsa \ kube-controller-manager.kubeconfig kube-scheduler.kubeconfig admin.kubeconfig ubuntu@${external_ip}:~/; done
 
-send kubeconfig to worker node
-for i in 0 1 2; do instance="${NAME}-worker-${i}" external_ip=$(aws ec2 describe-instances
---filters "Name=tag:Name,Values=${instance}"
---output text --query 'Reservations[].Instances[].PublicIpAddress') scp -i ../ssh/${NAME}.id_rsa
-kube-proxy.kubeconfig ${instance}-key.pem ubuntu@${external_ip}:~/; done
+## send kubeconfig to master node
 
-STEP 6 PREPARE THE ETCD DATABASE FOR ENCRYPTION AT REST.
+for i in 0 1 2; do
+  instance="${NAME}-master-${i}"
+  external_ip=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=${instance}" \
+    --output text --query 'Reservations[].Instances[].PublicIpAddress')
+  scp -i ../ssh/${NAME}.id_rsa \
+    kube-controller-manager.kubeconfig kube-scheduler.kubeconfig admin.kubeconfig ubuntu@${external_ip}:~/; 
+done
+
+## send kubeconfig to worker node
+
+for i in 0 1 2; do
+  instance="${NAME}-worker-${i}"
+  external_ip=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=${instance}" \
+    --output text --query 'Reservations[].Instances[].PublicIpAddress')
+  scp -i ../ssh/${NAME}.id_rsa \
+    kube-proxy.kubeconfig ${instance}-key.pem ubuntu@${external_ip}:~/; 
+done
+
+## STEP 6 PREPARE THE ETCD DATABASE FOR ENCRYPTION AT REST.
+===============================================================
+
 Kubernetes uses etcd (A distributed key value store) to store variety of data which includes the cluster state, application configurations, and secrets. By default, the data that is being persisted to the disk is not encrypted. Any attacker that is able to gain access to this database can exploit the cluster since the data is stored in plain text. Hence, it is a security risk for Kubernetes that needs to be addressed.
 
 To mitigate this risk, we must prepare to encrypt etcd at rest. "At rest" means data that is stored and persists on a disk. Anytime you hear "in-flight" or "in transit" refers to data that is being transferred over the network. "In-flight" encryption is done through TLS.
 
-Generate the encryption key and encode it using base64
-ETCD_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+## Generate the encryption key and encode it using base64
+
+`ETCD_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)`
 
 See the output that will be generated when called. Yours will be a different random string.
 
@@ -933,16 +1036,34 @@ OUTPUT:
 OuxSvV5XUQVid4fNNbeyFEDTUPr1yozZPQ+E6Eqj80m1FSVDB6jOHt9miD/7kMdJIvVshlMgxY80wFajlqItug===$
 
 ** Create an encryption-config.yaml file as documented officially by kubernetes
-cat > encryption-config.yaml <<EOF kind: EncryptionConfig apiVersion: v1 resources: - resources: - secrets - providers: - aescbc: keys: - name: key1 secret: ${ETCD_ENCRYPTION_KEY} - identity: {} EOF
 
-Send the encryption file to the Controller nodes using scp and a for loop.
-for i in 0 1 2; do instance="${NAME}-master-${i}" external_ip=$(aws ec2 describe-instances
---filters "Name=tag:Name,Values=${instance}"
---output text --query 'Reservations[].Instances[].PublicIpAddress') scp -i ../ssh/${NAME}.id_rsa
-encryption-config.yaml ubuntu@${external_ip}:~/;
+cat > encryption-config.yaml <<EOF
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: ${ETCD_ENCRYPTION_KEY}
+      - identity: {}
+EOF
+
+
+## Send the encryption file to the Controller nodes using scp and a for loop.
+
+for i in 0 1 2; do
+instance="${NAME}-master-${i}" \
+  external_ip=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=${instance}" \
+    --output text --query 'Reservations[].Instances[].PublicIpAddress')
+  scp -i ../ssh/${NAME}.id_rsa \
+    encryption-config.yaml ubuntu@${external_ip}:~/;
 done
 
-Bootstrap etcd cluster
+## Bootstrap etcd cluster
 ===========================================================
 
 TIPS: Use a terminal multi-plexer like multi-tabbed putty or tmux to work with multiple terminal sessions simultaneously. It will make your life easier, especially when you need to work on multiple nodes and run the same command across all nodes. Imagine repeating the same commands on 10 different nodes, and you don not intend to start automating with a configuration management tool like Ansible yet.
