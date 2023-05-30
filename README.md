@@ -1373,3 +1373,95 @@ HINTS:
 
 The problem relates to etcd configuration. Check the systemd logs for the api-server. The problem will be clearly logged, and it will give you an idea what is wrong. Find out how to fix it.
 
+
+## TEST THAT EVERYTHING IS WORKING FINE
+===================================================================
+
+1. To get the cluster details run:
+
+`kubectl cluster-info  --kubeconfig admin.kubeconfig`
+
+OUTPUT:
+
+Kubernetes control plane is running at https://k8s-api-server.svc.darey.io:6443
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+2. To get the current namespaces:
+
+`kubectl get namespaces --kubeconfig admin.kubeconfig`
+
+OUTPUT:
+
+NAME              STATUS   AGE
+default           Active   22m
+kube-node-lease   Active   22m
+kube-public       Active   22m
+kube-system       Active   22m
+
+3. To reach the Kubernetes API Server publicly
+
+`curl --cacert /var/lib/kubernetes/ca.pem https://$INTERNAL_IP:6443/version`
+
+OUTPUT:
+
+{
+  "major": "1",
+  "minor": "21",
+  "gitVersion": "v1.21.0",
+  "gitCommit": "cb303e613a121a29364f75cc67d3d580833a7479",
+  "gitTreeState": "clean",
+  "buildDate": "2021-04-08T16:25:06Z",
+  "goVersion": "go1.16.1",
+  "compiler": "gc",
+  "platform": "linux/amd64"
+}
+
+4. To get the status of each component:
+
+`kubectl get componentstatuses --kubeconfig admin.kubeconfig`
+
+5. On one of the controller nodes, configure Role Based Access Control (RBAC) so that the api-server has necessary authorization for for the kubelet.
+
+## Create the ClusterRole:
+
+cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:kube-apiserver-to-kubelet
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/proxy
+      - nodes/stats
+      - nodes/log
+      - nodes/spec
+      - nodes/metrics
+    verbs:
+      - "*"
+EOF
+
+
+## Create the ClusterRoleBinding to bind the kubernetes user with the role created above:
+
+cat <<EOF | kubectl --kubeconfig admin.kubeconfig  apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kube-apiserver
+  namespace: ""
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-apiserver-to-kubelet
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: kubernetes
+EOF
